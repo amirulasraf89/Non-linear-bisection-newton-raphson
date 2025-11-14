@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Nonlinear Equation Solver — Bisection, Iteration, & Newton-Raphson</title>
+<style>
+  /* Basic mobile-friendly styles using system fonts */
+  body { 
+    font-family: system-ui, -apple-system, Roboto, Arial, sans-serif; 
+    padding: 16px; 
+    max-width: 980px; 
+    margin: auto; 
+    background-color: #f8f8f8;
+    color: #333;
+  }
+  h1 { 
+    margin-bottom: 6px; 
+    color: #1a1a1a;
+  }
+  .row { 
+    display:flex; 
+    gap:12px; 
+    flex-wrap:wrap; 
+    align-items:center; 
+  }
+  label { 
+    display:block; 
+    font-size: 13px; 
+    margin-bottom:6px; 
+    font-weight: 500;
+    color: #555;
+  }
+  input[type=text], input[type=number], select, textarea { 
+    padding: 10px; 
+    font-size: 14px; 
+    width: 100%; 
+    box-sizing: border-box; 
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    transition: border-color 0.3s;
+  }
+  input:focus, select:focus {
+    border-color: #007bff;
+    outline: none;
+  }
+  .col { 
+    flex:1 1 200px; 
+    min-width:180px; 
+  }
+  .controls { 
+    display:flex; 
+    gap:10px; 
+    margin-top: 20px;
+    align-items: center;
+  }
+  button { 
+    padding: 10px 16px; 
+    font-size: 15px; 
+    cursor: pointer; 
+    border: none;
+    border-radius: 6px;
+    transition: background-color 0.2s, transform 0.1s;
+    font-weight: 600;
+  }
+  #solveBtn {
+    background-color: #007bff;
+    color: white;
+  }
+  #solveBtn:hover {
+    background-color: #0056b3;
+  }
+  #clearBtn {
+    background-color: #ccc;
+    color: #333;
+  }
+  #clearBtn:hover {
+    background-color: #bbb;
+  }
+  .output { 
+    margin-top: 30px; 
+    padding: 15px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  table { 
+    border-collapse: collapse; 
+    width: 100%; 
+    margin-top: 15px; 
+  }
+  th, td { 
+    border: 1px solid #e0e0e0; 
+    padding: 8px 10px; 
+    text-align: right; 
+    font-family: monospace; 
+    font-size: 13px;
+  }
+  th { 
+    background:#e9ecef; 
+    text-align:center; 
+    font-weight: 600;
+  }
+  .error { 
+    color: #dc3545; 
+    font-weight: 600;
+  }
+  .ok { 
+    color: #28a745; 
+    font-weight: 600;
+    padding: 5px 0;
+  }
+  .small { 
+    font-size: 13px; 
+    color: #6c757d;
+  }
+  .inline { 
+    display:inline-block; 
+    vertical-align:middle; 
+  }
+  /* Ensure responsiveness on small screens */
+  @media (max-width: 600px) {
+    .row {
+      gap: 10px;
+    }
+    .col {
+      flex: 1 1 100%;
+      min-width: auto;
+    }
+    .controls {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .controls button {
+      width: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+<h1>Nonlinear Equation Solver</h1>
+<p class="small">Enter a function <code>f(x)</code> (use <code>^</code> or <code>**</code> for powers). All JavaScript <code>Math</code> functions are allowed, including <code>sin(x)</code>, <code>cos(x)</code>, <code>exp(x)</code>, <code>log(x)</code>. **Angles must be in radians.**</p>
+
+<div style="margin-top:20px;">
+  <div class="row">
+    <div class="col">
+      <label for="fx">Function $f(x)$</label>
+      <!-- Example function f(x) = cos(x) - x -->
+      <input id="fx" type="text" value="cos(x) - x" />
+    </div>
+
+    <div class="col">
+      <label for="method">Method</label>
+      <select id="method">
+        <option value="bisection">Bisection</option>
+        <option value="fixed">Fixed-point iteration ($g(x)$)</option>
+        <option value="newton" selected>Newton-Raphson ($f'(x)$)</option>
+      </select>
+    </div>
+
+    <!-- Fixed-point specific field -->
+    <div class="col" id="gcol" style="display:none;">
+      <label for="gx">$g(x)$ for fixed-point</label>
+      <input id="gx" type="text" value="cos(x)" />
+    </div>
+
+    <!-- Newton-Raphson specific field -->
+    <div class="col" id="fprimecol" style="display:block;">
+      <label for="fpx">$f'(x)$ for Newton-Raphson</label>
+      <!-- Derivative of cos(x) - x is -sin(x) - 1 -->
+      <input id="fpx" type="text" value="-sin(x) - 1" />
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:15px;">
+    <div class="col">
+      <label>Interval / Initial Guess</label>
+      <div style="display:flex; gap:8px;">
+        <input id="a" type="text" placeholder="a (left)" value="0" />
+        <input id="b" type="text" placeholder="b (right) or x0 for iteration" value="1" />
+      </div>
+      <div class="small" style="margin-top:6px;">For Bisection: **a** and **b** are interval endpoints. For Fixed-point and Newton-Raphson: **b** is the initial guess $x_0$.</div>
+    </div>
+
+    <div class="col">
+      <label for="tol">Tolerance ($\epsilon$)</label>
+      <input id="tol" type="number" value="1e-8" step="any" />
+    </div>
+
+    <div class="col">
+      <label for="maxit">Max iterations</label>
+      <input id="maxit" type="number" value="50" />
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:8px;">
+    <div class="col">
+      <label for="lambda">Optional: relaxation $\lambda$ (for $g(x) = x - \lambda f(x)$)</label>
+      <input id="lambda" type="text" placeholder="leave empty to use provided g(x) when method=fixed" />
+      <div class="small">If you provide $\lambda$ and choose fixed-point, the solver uses $g(x)=x - \lambda \cdot f(x)$.</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="solveBtn">Solve</button>
+    <button id="clearBtn">Clear output</button>
+    <div id="status" class="inline small" style="margin-left:8px;"></div>
+  </div>
+
+  <div class="output" id="output"></div>
+</div>
+
+<script>
+/* Utility: convert expression string to a safe JS function in x.
+   Replaces ^ with **, provides Math.* functions (sin, cos, etc).
+   Returns function(x) or throws.
+*/
+function makeFunc(expr) {
+  if (typeof expr !== 'string' || !expr.trim()) throw new Error('Expression must be a non-empty string');
+  
+  // 1. Replace powers (^) with JavaScript's **
+  let e = expr.replace(/\\^/g, '**');
+
+  // 2. Automatically prepend Math. to common functions and constants
+  const names = ["sin","cos","tan","asin","acos","atan","exp","log","log10","sqrt","abs","pow","min","max","floor","ceil","round","PI","E","sinh","cosh","tanh"];
+  names.forEach(name => {
+    // Regex matches the function name followed by an opening parenthesis, ensuring it's not already Math.name
+    const re = new RegExp('\\b' + name + '\\s*\\(', 'g');
+    e = e.replace(re, 'Math.' + name + '(');
+  });
+  
+  // Replace constants PI and E
+  e = e.replace(/\bPI\b/g, 'Math.PI').replace(/\bE\b/g, 'Math.E');
+
+  try {
+    // Use Function constructor to safely create a function in 'x'.
+    // The 'with (Math)' block ensures Math functions are accessible without constant prefixing.
+    const f = new Function('x', 'with (Math) { return (' + e + '); }');
+    // Test the function with a dummy number to catch simple definition errors
+    f(1.2345);
+    return f;
+  } catch (err) {
+    throw new Error('Invalid expression: ' + err.message);
+  }
+}
+
+function formatNum(v) {
+  if (!isFinite(v)) return String(v);
+  // Format to show high precision (12 significant digits)
+  return Number(v).toPrecision(12).replace(/(?:\.0+|(\.\d+?)0+)$/,'$1');
+}
+
+function appendHTML(el, html) { el.insertAdjacentHTML('beforeend', html); }
+
+// Event listener to toggle the visibility of g(x) and f'(x) fields
+document.getElementById('method').addEventListener('change', e => {
+  const m = e.target.value;
+  document.getElementById('gcol').style.display = (m === 'fixed') ? 'block' : 'none';
+  document.getElementById('fprimecol').style.display = (m === 'newton') ? 'block' : 'none';
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  document.getElementById('output').innerHTML = '';
+  document.getElementById('status').textContent = '';
+});
+
+document.getElementById('solveBtn').addEventListener('click', () => {
+  const out = document.getElementById('output');
+  out.innerHTML = '';
+  const status = document.getElementById('status');
+  status.textContent = 'Working...';
+
+  const fxText = document.getElementById('fx').value.trim();
+  const method = document.getElementById('method').value;
+  // Use eval() to allow expressions for initial conditions/endpoints, e.g., 'Math.PI/4'
+  const aText = document.getElementById('a').value.trim();
+  const bText = document.getElementById('b').value.trim();
+  const gxText = document.getElementById('gx').value.trim();
+  const fpxText = document.getElementById('fpx').value.trim();
+  const tol = Number(document.getElementById('tol').value) || 1e-8;
+  const maxit = parseInt(document.getElementById('maxit').value) || 50;
+  const lambdaText = document.getElementById('lambda').value.trim();
+
+  try {
+    const f = makeFunc(fxText);
+
+    if (method === 'bisection') {
+      // --- Bisection Logic ---
+      const a = Number(eval(aText));
+      const b = Number(eval(bText));
+      if (!isFinite(a) || !isFinite(b)) throw new Error('Invalid interval endpoints');
+      if (a >= b) throw new Error('Require a < b for interval [a,b]');
+      
+      const fa = f(a);
+      const fb = f(b);
+      
+      if (!isFinite(fa) || !isFinite(fb)) throw new Error('f(a) or f(b) is not finite. Check domain.');
+      
+      if (fa * fb > 0) {
+        appendHTML(out, `<div class="error">f(a) and f(b) have the same sign (f(a)=${formatNum(fa)}, f(b)=${formatNum(fb)}). Bisection requires sign change.</div>`);
+        status.textContent = '';
+        return;
+      }
+      
+      appendHTML(out, `<h3>Bisection steps: Root of $f(x)=0$ in $[${formatNum(a)}, ${formatNum(b)}]$</h3>`);
+      appendHTML(out, `<table><thead><tr><th>iter</th><th>a</th><th>b</th><th>c</th><th>f(c)</th><th>Interval Width</th></tr></thead><tbody id="bis_tbody"></tbody></table>`);
+      const tbody = document.getElementById('bis_tbody');
+      let left = a, right = b, fl = fa, fr = fb;
+      let c, fc;
+      
+      for (let k=1; k<=maxit; k++){
+        c = (left+right)/2;
+        try { fc = f(c); } catch(e) { appendHTML(out, `<div class="error">f(c) evaluation failed at iter ${k}.</div>`); break; }
+        
+        const width = Math.abs(right-left);
+        appendHTML(tbody, `<tr><td>${k}</td><td>${formatNum(left)}</td><td>${formatNum(right)}</td><td>${formatNum(c)}</td><td>${formatNum(fc)}</td><td>${formatNum(width)}</td></tr>`);
+        
+        if (!isFinite(fc)) { appendHTML(out, `<div class="error">f(c) not finite at iteration ${k}.</div>`); break; }
+        
+        if (Math.abs(fc) <= tol || width/2 <= tol) {
+          appendHTML(out, `<div class="ok"><strong>Converged</strong>: root $\approx$ ${formatNum(c)} after ${k} iterations ($f(c)$ $\approx$ ${formatNum(fc)})</div>`);
+          status.textContent = '';
+          return;
+        }
+        
+        // choose subinterval
+        if (fl * fc < 0) {
+          right = c; fr = fc;
+        } else {
+          left = c; fl = fc;
+        }
+        
+        if (k === maxit) {
+          appendHTML(out, `<div class="small">Reached max iterations. Best estimate root $\approx$ ${formatNum(c)}$ ($f(c)$ $\approx$ ${formatNum(fc)}$). Interval width ${formatNum(Math.abs(right-left))}.</div>`);
+        }
+      }
+
+    } else if (method === 'fixed') {
+      // --- Fixed-Point Logic ---
+      let g;
+      if (lambdaText.length > 0) {
+        const lambda = Number(eval(lambdaText));
+        if (!isFinite(lambda)) throw new Error('Invalid relaxation parameter $\lambda$');
+        // g(x) = x - lambda * f(x)
+        g = function(x) { return x - lambda * f(x); };
+        appendHTML(out, `<div class="small">Using automatically generated $g(x) = x - ${formatNum(lambda)} \cdot f(x)$</div>`);
+      } else {
+        if (!gxText) throw new Error('Please provide $g(x)$ or a $\lambda$ value.');
+        g = makeFunc(gxText);
+      }
+      
+      const x0 = Number(eval(bText)); // treat b as initial x0
+      if (!isFinite(x0)) throw new Error('Invalid initial guess $x_0$ (use the "b" input box)');
+      
+      appendHTML(out, `<h3>Fixed-point iteration steps: $x_{n+1}=g(x_n)$ (Initial $x_0=${formatNum(x0)}$)</h3>`);
+      appendHTML(out, `<table><thead><tr><th>iter</th><th>$x_n$</th><th>$x_{n+1}=g(x_n)$</th><th>$|x_{n+1}-x_n|$</th><th>$f(x_{n+1})$</th></tr></thead><tbody id="fix_tbody"></tbody></table>`);
+      const tbody2 = document.getElementById('fix_tbody');
+      let xn = x0;
+      
+      for (let k=1; k<=maxit; k++){
+        let xn1;
+        try {
+          xn1 = g(xn);
+        } catch (err) {
+          appendHTML(out, `<div class="error">$g(x)$ evaluation failed at iter ${k}: ${err.message}</div>`);
+          status.textContent = '';
+          return;
+        }
+        
+        const errAbs = Math.abs(xn1 - xn);
+        let fval;
+        try { fval = f(xn1); } catch(e) { fval = NaN; }
+        
+        appendHTML(tbody2, `<tr><td>${k}</td><td>${formatNum(xn)}</td><td>${formatNum(xn1)}</td><td>${formatNum(errAbs)}</td><td>${formatNum(fval)}</td></tr>`);
+        
+        if (!isFinite(xn1)) { appendHTML(out, `<div class="error">Iteration produced non-finite value at iter ${k}.</div>`); status.textContent=''; return; }
+        
+        if (errAbs <= tol) {
+          appendHTML(out, `<div class="ok"><strong>Converged</strong>: root $x$ $\approx$ ${formatNum(xn1)} after ${k} iterations ($|\Delta|$=${formatNum(errAbs)}, $f(x)$ $\approx$ ${formatNum(fval)})</div>`);
+          status.textContent = '';
+          return;
+        }
+        
+        xn = xn1;
+        
+        if (k === maxit) {
+          appendHTML(out, `<div class="small">Reached max iterations. Best estimate $x$ $\approx$ ${formatNum(xn)}$ (last $|\Delta|$=${formatNum(errAbs)}, $f(x)$ $\approx$ ${formatNum(fval)}).</div>`);
+          status.textContent = '';
+          return;
+        }
+      }
+
+    } else if (method === 'newton') {
+      // --- Newton-Raphson Logic ---
+      if (!fpxText) throw new Error("Please provide the derivative $f'(x)$ for Newton-Raphson.");
+      const fp = makeFunc(fpxText);
+      const x0 = Number(eval(bText)); // treat b as initial x0
+      if (!isFinite(x0)) throw new Error('Invalid initial guess $x_0$ (use the "b" input box)');
+      
+      appendHTML(out, `<h3>Newton-Raphson steps: $x_{n+1} = x_n - f(x_n)/f'(x_n)$ (Initial $x_0=${formatNum(x0)}$)</h3>`);
+      appendHTML(out, `<table><thead><tr><th>iter</th><th>$x_n$</th><th>$f(x_n)$</th><th>$f'(x_n)$</th><th>$x_{n+1}$</th><th>$|x_{n+1}-x_n|$</th></tr></thead><tbody id="newton_tbody"></tbody></table>`);
+      const tbody3 = document.getElementById('newton_tbody');
+      let xn = x0;
+      
+      for (let k=1; k<=maxit; k++){
+        let fxn, fpxn, xn1;
+        
+        try { fxn = f(xn); } catch(e) { appendHTML(out, `<div class="error">$f(x)$ evaluation failed at iter ${k}.</div>`); status.textContent=''; return; }
+        try { fpxn = fp(xn); } catch(e) { appendHTML(out, `<div class="error">$f'(x)$ evaluation failed at iter ${k}.</div>`); status.textContent=''; return; }
+
+        if (Math.abs(fpxn) < 1e-12) { 
+          appendHTML(out, `<div class="error">Derivative $f'(x)$ is near zero at $x_n=${formatNum(xn)}$ ($f'(x)$ $\approx ${formatNum(fpxn)}$). The method failed.</div>`);
+          status.textContent=''; 
+          return;
+        }
+        
+        // Newton-Raphson formula
+        xn1 = xn - fxn / fpxn;
+        
+        const errAbs = Math.abs(xn1 - xn);
+
+        appendHTML(tbody3, `<tr><td>${k}</td><td>${formatNum(xn)}</td><td>${formatNum(fxn)}</td><td>${formatNum(fpxn)}</td><td>${formatNum(xn1)}</td><td>${formatNum(errAbs)}</td></tr>`);
+        
+        if (!isFinite(xn1)) { appendHTML(out, `<div class="error">Iteration produced non-finite value at iter ${k}.</div>`); status.textContent=''; return; }
+        
+        if (errAbs <= tol) {
+          // Confirm with final f(x) evaluation
+          let fvalFinal = f(xn1); 
+          appendHTML(out, `<div class="ok"><strong>Converged</strong>: root $x$ $\approx$ ${formatNum(xn1)} after ${k} iterations ($|\Delta|$=${formatNum(errAbs)}, $f(x)$ $\approx$ ${formatNum(fvalFinal)})</div>`);
+          status.textContent = '';
+          return;
+        }
+        
+        xn = xn1;
+        
+        if (k === maxit) {
+          let fvalFinal = f(xn);
+          appendHTML(out, `<div class="small">Reached max iterations. Best estimate root $x$ $\approx$ ${formatNum(xn)}$ (last $|\Delta|$=${formatNum(errAbs)}, $f(x)$ $\approx$ ${formatNum(fvalFinal)}).</div>`);
+          status.textContent = '';
+          return;
+        }
+      }
+    }
+
+  } catch (err) {
+    appendHTML(out, `<div class="error">Error: ${err.message}</div>`);
+    status.textContent = '';
+  }
+});
+
+// Initial display setup when the script loads
+document.addEventListener('DOMContentLoaded', () => {
+  const methodSelect = document.getElementById('method');
+  // Trigger the change event once to set the initial visibility based on the selected option
+  methodSelect.dispatchEvent(new Event('change'));
+});
+</script>
+</body>
+</html>
+
