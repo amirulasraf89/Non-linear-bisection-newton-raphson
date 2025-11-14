@@ -145,8 +145,8 @@
   <div class="row">
     <div class="col">
       <label for="fx">Function $f(x)$</label>
-      <!-- Example function f(x) = cos(x) - x -->
-      <input id="fx" type="text" value="cos(x) - x" />
+      <!-- UPDATED f(x) = x^2 + sin(x) - 4 -->
+      <input id="fx" type="text" value="x**2 + sin(x) - 4" />
     </div>
 
     <div class="col">
@@ -167,8 +167,8 @@
     <!-- Newton-Raphson specific field -->
     <div class="col" id="fprimecol" style="display:block;">
       <label for="fpx">$f'(x)$ for Newton-Raphson</label>
-      <!-- Derivative of cos(x) - x is -sin(x) - 1 -->
-      <input id="fpx" type="text" value="-sin(x) - 1" />
+      <!-- UPDATED f'(x) = 2x + cos(x) -->
+      <input id="fpx" type="text" value="2*x + cos(x)" />
     </div>
   </div>
 
@@ -176,8 +176,9 @@
     <div class="col">
       <label>Interval / Initial Guess</label>
       <div style="display:flex; gap:8px;">
-        <input id="a" type="text" placeholder="a (left)" value="0" />
-        <input id="b" type="text" placeholder="b (right) or x0 for iteration" value="1" />
+        <!-- Initial interval/guess for x^2 + sin(x) - 4 is [1, 2] -->
+        <input id="a" type="text" placeholder="a (left)" value="1" />
+        <input id="b" type="text" placeholder="b (right) or x0 for iteration" value="2" />
       </div>
       <div class="small" style="margin-top:6px;">For Bisection: **a** and **b** are interval endpoints. For Fixed-point and Newton-Raphson: **b** is the initial guess $x_0$.</div>
     </div>
@@ -234,7 +235,6 @@ function makeFunc(expr) {
 
   try {
     // Use Function constructor to safely create a function in 'x'.
-    // The 'with (Math)' block ensures Math functions are accessible without constant prefixing.
     const f = new Function('x', 'with (Math) { return (' + e + '); }');
     // Test the function with a dummy number to catch simple definition errors
     f(1.2345);
